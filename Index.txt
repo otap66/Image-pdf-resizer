@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>File Resizer & Preview</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.worker.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.1.3/js/bootstrap.bundle.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.1.3/css/bootstrap.min.css">
+</head>
+<body class="container mt-4">
+    <h2 class="text-center">File Resizer & Preview</h2>
+    
+    <div class="mb-3">
+        <label class="form-label">Upload Image or PDF</label>
+        <input type="file" id="fileInput" class="form-control" accept="image/*,application/pdf">
+    </div>
+
+    <div id="imageOptions" class="mb-3" style="display:none;">
+        <label class="form-label">Image Quality (1-100%)</label>
+        <input type="range" id="qualityRange" class="form-range" min="1" max="100" value="80">
+    </div>
+
+    <div class="mb-3">
+        <button class="btn btn-primary" onclick="processFile()">Preview & Resize</button>
+    </div>
+
+    <div class="mb-3">
+        <h5>File Size: <span id="fileSize">-</span></h5>
+        <div id="previewContainer"></div>
+    </div>
+
+    <button id="downloadBtn" class="btn btn-success" style="display:none;" onclick="downloadFile()">Download</button>
+
+    <script>
+        let processedFile, fileType;
+        
+        document.getElementById("fileInput").addEventListener("change", function () {
+            let file = this.files[0];
+            if (file) {
+                fileType = file.type;
+                document.getElementById("fileSize").innerText = (file.size / 1024).toFixed(2) + " KB";
+
+                if (fileType.startsWith("image/")) {
+                    document.getElementById("imageOptions").style.display = "block";
+                } else {
+                    document.getElementById("imageOptions").style.display = "none";
+                }
+            }
+        });
+
+        function processFile() {
+            let file = document.getElementById("fileInput").files[0];
+            if (!file) {
+                alert("Please upload a file.");
+                return;
+            }
+
+            let reader = new FileReader();
+            reader.onload = function (e) {
+                if (fileType.startsWith("image/")) {
+                    compressImage(e.target.result);
+                } else if (fileType === "application/pdf") {
+                    showPDFPreview(e.target.result);
+                }
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function compressImage(imageSrc) {
+            let img = new Image();
+            img.src = imageSrc;
+            img.onload = function () {
+                let canvas = document.createElement("canvas");
+                let ctx = canvas.getContext("2d");
+                let quality = document.getElementById("qualityRange").value / 100;
+
+                canvas.width = img.width;
+                canvas.height = img.height;
+                ctx.drawImage(img, 0, 0, img.width, img.height);
+
+                processedFile = canvas.toDataURL("image/jpeg", quality);
+                updateFileSize(processedFile);
+                showImagePreview(processedFile);
+            };
+        }
+
+        function showImagePreview(imageSrc) {
+            document.getElementById("previewContainer").innerHTML = `<img src="${imageSrc}" class="img-fluid" alt="Preview">`;
+            document.getElementById("downloadBtn").style.display = "block";
+        }
+
+        function showPDFPreview(pdfSrc) {
+            let loadingTask = pdfjsLib.getDocument(pdfSrc);
+            loadingTask.promise.then(function (pdf) {
+                pdf.getPage(1).then(function (page) {
+                    let canvas = document.createElement("canvas");
+                    let ctx = canvas.getContext("2d");
+                    let viewport = page.getViewport({ scale: 1.0 });
+
+                    canvas.width = viewport.width;
+                    canvas.height = viewport.height;
+                    page.render({ canvasContext: ctx, viewport: viewport });
+
+                    document.getElementById("previewContainer").innerHTML = `<canvas id="pdfPreview"></canvas>`;
+                    document.getElementById("pdfPreview").replaceWith(canvas);
+                    
+                    processedFile = pdfSrc;
+                    document.getElementById("downloadBtn").style.display = "block";
+                });
+            });
+        }
+
+        function updateFileSize(fileData) {
+            let size = (fileData.length * 0.75) / 1024;
+            document.getElementById("fileSize").innerText = size.toFixed(2) + " KB";
+        }
+
+        function downloadFile() {
+            let link = document.createElement("a");
+            link.href = processedFile;
+            link.download = fileType.startsWith("image/") ? "compressed_image.jpg" : "document.pdf";
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+    </script>
+</body>
+</html>
